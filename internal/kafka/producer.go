@@ -17,9 +17,9 @@ func NewProducer(brokers []string, topic string) *Producer {
 			Addr:     kafka.TCP(brokers...),
 			Topic:    topic,
 			Balancer: &kafka.LeastBytes{},
+			Async:    false,
 		},
 	}
-
 }
 
 func (p *Producer) Publish(ctx context.Context, key string, value []byte) error {
@@ -29,11 +29,14 @@ func (p *Producer) Publish(ctx context.Context, key string, value []byte) error 
 	})
 
 	if err != nil {
-		log.Printf("Kafka publish failed error :", err)
+		log.Printf("Kafka publish failed: %v", err)
 		return err
 	}
 
-	log.Printf("Kafka event sent topic=%s ", p.writer.Topic)
-
+	log.Printf("Kafka event published topic=%s key=%s", p.writer.Topic, key)
 	return nil
+}
+
+func (p *Producer) Close() error {
+	return p.writer.Close()
 }
