@@ -28,16 +28,14 @@ func (h *Handler) PlaceOrder(c *gin.Context) {
 
 	trades := h.Book.Match(&order)
 
-	// Publish to Kafka
-	err := h.Kafka.Publish(h.Ctx, order.ID, []byte("order executed"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to send event to kafka"})
+	if err := h.Kafka.Publish(h.Ctx, order.ID, []byte("order executed")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "kafka publish failed"})
+		return
 	}
 
-	// Update Redis snapshot
-	err = h.Redis.Set(h.Ctx, "orderbook", []byte("snapshot"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to save order book to redis"})
+	if err := h.Redis.Set(h.Ctx, "orderbook", []byte("snapshot")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "redis save failed"})
+		return
 	}
 
 	c.JSON(http.StatusOK, trades)
