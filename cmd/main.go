@@ -10,11 +10,22 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	book := engine.NewOrderBook()
 	//kafka producer
-	kafkaProducer := kafka.NewProducer([]string{"localhost:9092"}, "orders")
+	kafkaProducer := kafka.NewProducer([]string{"localhost:29092"}, "orders")
+
+	// kafka consumer
+	kafkaConsumer := kafka.NewConsumer(
+		[]string{"localhost:29092"},
+		"orders",
+		"trade-engine-group",
+	)
+
+	go kafkaConsumer.Start(ctx)
+	
 	// cache for redis
 	cache := redis.NewCache("localhost:6379")
 
