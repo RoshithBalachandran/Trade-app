@@ -2,9 +2,8 @@ package kafka
 
 import (
 	"context"
-	"net/http"
+	"log"
 
-	"github.com/gin-gonic/gin"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -12,28 +11,45 @@ type Consumer struct {
 	reader *kafka.Reader
 }
 
-func NewConsumer(brokers []string, topic string) *Consumer {
+func NewConsumer(brokers []string, topic, groupID string) *Consumer {
 	return &Consumer{
 		reader: kafka.NewReader(kafka.ReaderConfig{
-			Brokers: brokers,
-			Topic:   topic,
+			Brokers:     brokers,
+			Topic:       topic,
+			GroupID:     groupID,
+			StartOffset: kafka.FirstOffset,
+			MinBytes:    1e3,
+			MaxBytes:    10e6,
 		}),
 	}
 }
 
-func (c *Consumer) Consume(ctx *gin.Context) {
-	msg, err := c.reader.ReadMessage(context.Background())
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to read kafka message",
-		})
-		return
-	}
+func (c *Consumer) Start(ctx context.Context) {
+	log.Println("Kafka consumer started")
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"Sucess":"new event from kafka",
-		"topic": msg.Topic,
-		"key":   string(msg.Key),
-		"value": string(msg.Value),
-	})
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Kafka consumer stopping")
+			_ = c.reader.Close()
+			return
+		default:
+			msg, err := c.reader.FetchMessage(ctx)
+			if err != nil {
+				log.Printf("Kafka fetch error: %v", err)
+				continue
+			}
+
+			log.Printf(
+				"Consumed event | topic=%s key=%s value=%s",
+				msg.Topic,
+				string(msg.Key),
+				string(msg.Value),
+			)
+
+			if err := c.reader.CommitMessages(ctx, msg); err != nil {
+				log.Printf("Kafka commit error: %v", err)
+			}
+		}
+	}
 }
